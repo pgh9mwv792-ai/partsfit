@@ -30,6 +30,9 @@ const PARTS = [
 ];
 
 export default function App() {
+  const [tab, setTab] = useState("fitment");
+
+  // Fitment state
   const [year, setYear] = useState("");
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
@@ -40,9 +43,22 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [partData, setPartData] = useState(null);
 
+  // Lookup state
+  const [partNumberQuery, setPartNumberQuery] = useState("");
+  const [partNumberResult, setPartNumberResult] = useState(null);
+  const [partNumberSearched, setPartNumberSearched] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+
   const makes = Object.keys(VEHICLES);
   const models = make ? VEHICLES[make] : [];
   const canSearch = year && make && model && part;
+
+  function switchTab(t) {
+    setTab(t);
+    setSearched(false);
+    setPartNumberSearched(false);
+    setVerified(false);
+  }
 
   async function handleSearch() {
     if (!canSearch) return;
@@ -91,136 +107,260 @@ export default function App() {
     }
   }
 
+  async function handlePartNumberLookup() {
+    if (!partNumberQuery.trim()) return;
+    setLookupLoading(true);
+    setPartNumberResult(null);
+    setPartNumberSearched(false);
+
+    const { data, error } = await supabase
+      .from("Parts")
+      .select("*")
+      .ilike("part_number", partNumberQuery.trim())
+      .limit(1);
+
+    setLookupLoading(false);
+    setPartNumberSearched(true);
+    if (!error && data && data.length > 0) {
+      setPartNumberResult(data[0]);
+    } else {
+      setPartNumberResult(null);
+    }
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.container}>
 
+        {/* Header */}
         <div style={styles.header}>
           <h1 style={styles.title}>🔧 PartsFit</h1>
           <p style={styles.subtitle}>Check if a part fits your car before you buy</p>
         </div>
 
-        {!searched && !loading && (
-          <div style={styles.card}>
-            <p style={styles.cardTitle}>Your vehicle</p>
-            <div style={styles.row}>
-              <div style={styles.field}>
-                <label style={styles.label}>Year</label>
-                <select style={styles.select} value={year} onChange={e => setYear(e.target.value)}>
-                  <option value="">Year</option>
-                  {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
-              <div style={styles.field}>
-                <label style={styles.label}>Make</label>
-                <select style={styles.select} value={make} onChange={e => { setMake(e.target.value); setModel(""); }}>
-                  <option value="">Make</option>
-                  {makes.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
-              <div style={styles.field}>
-                <label style={styles.label}>Model</label>
-                <select style={styles.select} value={model} onChange={e => setModel(e.target.value)} disabled={!make}>
-                  <option value="">Model</option>
-                  {models.map(m => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={styles.row2}>
-              <div style={styles.field}>
-                <label style={styles.label}>Trim (optional)</label>
-                <input
-                  style={styles.input}
-                  type="text"
-                  placeholder="e.g. EX, LX, Sport"
-                  value={trim}
-                  onChange={e => setTrim(e.target.value)}
-                />
-              </div>
-              <div style={styles.field}>
-                <label style={styles.label}>Part you need</label>
-                <select style={styles.select} value={part} onChange={e => setPart(e.target.value)}>
-                  <option value="">Select part</option>
-                  {PARTS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-            </div>
-            <button
-              style={{ ...styles.button, opacity: canSearch ? 1 : 0.4 }}
-              onClick={handleSearch}
-              disabled={!canSearch}
-            >
-              Check fitment
-            </button>
-          </div>
-        )}
+        {/* Tabs */}
+        <div style={styles.tabs}>
+          <button
+            style={{ ...styles.tab, ...(tab === "fitment" ? styles.tabActive : {}) }}
+            onClick={() => switchTab("fitment")}
+          >
+            Check fitment
+          </button>
+          <button
+            style={{ ...styles.tab, ...(tab === "lookup" ? styles.tabActive : {}) }}
+            onClick={() => switchTab("lookup")}
+          >
+            Look up part number
+          </button>
+        </div>
 
-        {loading && (
-          <div style={{ ...styles.card, textAlign: "center", padding: "2rem" }}>
-            <p style={{ fontSize: "15px", color: "#666" }}>Looking up parts...</p>
-          </div>
-        )}
-
-        {searched && (
-          <div>
-            {partData ? (
-              <div style={{ ...styles.card, ...styles.resultCard }}>
-                <div style={styles.fitBadge}>✅ Found a match for your {year} {make} {model}</div>
-                <div style={styles.partGrid}>
-                  <div style={styles.infoBox}>
-                    <p style={styles.infoLabel}>Part type</p>
-                    <p style={styles.infoValue}>{partData.part_type}</p>
-                  </div>
-                  <div style={styles.infoBox}>
-                    <p style={styles.infoLabel}>Part number</p>
-                    <p style={styles.infoValue}>{partData.part_number}</p>
-                  </div>
-                  <div style={styles.infoBox}>
-                    <p style={styles.infoLabel}>Brand</p>
-                    <p style={styles.infoValue}>{partData.brand}</p>
-                  </div>
-                  <div style={styles.infoBox}>
-                    <p style={styles.infoLabel}>Engine</p>
-                    <p style={styles.infoValue}>{partData.engine}</p>
-                  </div>
-                </div>
-                {partData.notes && (
-                  <p style={styles.note}>💡 {partData.notes}</p>
-                )}
-              </div>
-            ) : (
-              <div style={{ ...styles.card, borderLeft: "4px solid #f59e0b" }}>
-                <p style={{ fontSize: "16px", fontWeight: "600", color: "#b45309", marginBottom: "8px" }}>
-                  ⚠️ No verified data yet for this combination
-                </p>
-                <p style={{ fontSize: "14px", color: "#666", margin: 0 }}>
-                  We don't have a confirmed part number for a {year} {make} {model} {part.toLowerCase()} yet. Check back as our database grows — or be the first to add it!
-                </p>
-              </div>
-            )}
-
-            {!verified ? (
+        {/* ── FITMENT TAB ── */}
+        {tab === "fitment" && (
+          <>
+            {!searched && !loading && (
               <div style={styles.card}>
-                <p style={styles.cardTitle}>Did this part actually work?</p>
-                <p style={styles.verifyText}>Help the next person out — takes 2 seconds.</p>
-                <div style={styles.verifyRow}>
-                  <button style={{ ...styles.verifyBtn, ...styles.verifyYes }} onClick={() => handleVerify("confirmed")}>✅ Confirmed fit</button>
-                  <button style={{ ...styles.verifyBtn, ...styles.verifyNo }} onClick={() => handleVerify("didnt_fit")}>❌ Didn't fit</button>
-                  <button style={{ ...styles.verifyBtn, ...styles.verifyMaybe }} onClick={() => handleVerify("fit_with_mods")}>⚠️ Fit with mods</button>
+                <p style={styles.cardTitle}>Your vehicle</p>
+                <div style={styles.row}>
+                  <div style={styles.field}>
+                    <label style={styles.label}>Year</label>
+                    <select style={styles.select} value={year} onChange={e => setYear(e.target.value)}>
+                      <option value="">Year</option>
+                      {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                  <div style={styles.field}>
+                    <label style={styles.label}>Make</label>
+                    <select style={styles.select} value={make} onChange={e => { setMake(e.target.value); setModel(""); }}>
+                      <option value="">Make</option>
+                      {makes.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                  <div style={styles.field}>
+                    <label style={styles.label}>Model</label>
+                    <select style={styles.select} value={model} onChange={e => setModel(e.target.value)} disabled={!make}>
+                      <option value="">Model</option>
+                      {models.map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div style={{ ...styles.card, textAlign: "center" }}>
-                <p style={{ fontSize: "24px", margin: "0 0 8px" }}>🙌</p>
-                <p style={{ fontSize: "15px", fontWeight: "500", color: "#111", margin: "0 0 4px" }}>Thanks for confirming!</p>
-                <p style={{ fontSize: "14px", color: "#666", margin: 0 }}>You just helped the next person.</p>
+                <div style={styles.row2}>
+                  <div style={styles.field}>
+                    <label style={styles.label}>Trim (optional)</label>
+                    <input
+                      style={styles.input}
+                      type="text"
+                      placeholder="e.g. EX, LX, Sport"
+                      value={trim}
+                      onChange={e => setTrim(e.target.value)}
+                    />
+                  </div>
+                  <div style={styles.field}>
+                    <label style={styles.label}>Part you need</label>
+                    <select style={styles.select} value={part} onChange={e => setPart(e.target.value)}>
+                      <option value="">Select part</option>
+                      {PARTS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <button
+                  style={{ ...styles.button, opacity: canSearch ? 1 : 0.4 }}
+                  onClick={handleSearch}
+                  disabled={!canSearch}
+                >
+                  Check fitment
+                </button>
               </div>
             )}
 
-            <button style={styles.resetBtn} onClick={handleReset}>
-              ← Search another part
-            </button>
-          </div>
+            {loading && (
+              <div style={{ ...styles.card, textAlign: "center", padding: "2rem" }}>
+                <p style={{ fontSize: "15px", color: "#666" }}>Looking up parts...</p>
+              </div>
+            )}
+
+            {searched && (
+              <div>
+                {partData ? (
+                  <div style={{ ...styles.card, ...styles.resultCard }}>
+                    <div style={styles.fitBadge}>✅ Found a match for your {year} {make} {model}</div>
+                    <div style={styles.partGrid}>
+                      <div style={styles.infoBox}>
+                        <p style={styles.infoLabel}>Part type</p>
+                        <p style={styles.infoValue}>{partData.part_type}</p>
+                      </div>
+                      <div style={styles.infoBox}>
+                        <p style={styles.infoLabel}>Part number</p>
+                        <p style={styles.infoValue}>{partData.part_number}</p>
+                      </div>
+                      <div style={styles.infoBox}>
+                        <p style={styles.infoLabel}>Brand</p>
+                        <p style={styles.infoValue}>{partData.brand}</p>
+                      </div>
+                      <div style={styles.infoBox}>
+                        <p style={styles.infoLabel}>Engine</p>
+                        <p style={styles.infoValue}>{partData.engine}</p>
+                      </div>
+                    </div>
+                    {partData.notes && (
+                      <p style={styles.note}>💡 {partData.notes}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ ...styles.card, borderLeft: "4px solid #f59e0b" }}>
+                    <p style={{ fontSize: "16px", fontWeight: "600", color: "#b45309", marginBottom: "8px" }}>
+                      ⚠️ No verified data yet for this combination
+                    </p>
+                    <p style={{ fontSize: "14px", color: "#666", margin: 0 }}>
+                      We don't have a confirmed part number for a {year} {make} {model} {part.toLowerCase()} yet. Check back as our database grows!
+                    </p>
+                  </div>
+                )}
+
+                {!verified ? (
+                  <div style={styles.card}>
+                    <p style={styles.cardTitle}>Did this part actually work?</p>
+                    <p style={styles.verifyText}>Help the next person out — takes 2 seconds.</p>
+                    <div style={styles.verifyRow}>
+                      <button style={{ ...styles.verifyBtn, ...styles.verifyYes }} onClick={() => handleVerify("confirmed")}>✅ Confirmed fit</button>
+                      <button style={{ ...styles.verifyBtn, ...styles.verifyNo }} onClick={() => handleVerify("didnt_fit")}>❌ Didn't fit</button>
+                      <button style={{ ...styles.verifyBtn, ...styles.verifyMaybe }} onClick={() => handleVerify("fit_with_mods")}>⚠️ Fit with mods</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ ...styles.card, textAlign: "center" }}>
+                    <p style={{ fontSize: "24px", margin: "0 0 8px" }}>🙌</p>
+                    <p style={{ fontSize: "15px", fontWeight: "500", color: "#111", margin: "0 0 4px" }}>Thanks for confirming!</p>
+                    <p style={{ fontSize: "14px", color: "#666", margin: 0 }}>You just helped the next person.</p>
+                  </div>
+                )}
+
+                <button style={styles.resetBtn} onClick={handleReset}>
+                  ← Search another part
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── LOOKUP TAB ── */}
+        {tab === "lookup" && (
+          <>
+            {!partNumberSearched && !lookupLoading && (
+              <div style={styles.card}>
+                <p style={styles.cardTitle}>Part number lookup</p>
+                <p style={{ fontSize: "14px", color: "#666", marginBottom: "12px", marginTop: 0 }}>
+                  Have a part number but not sure what it fits? Enter it below.
+                </p>
+                <div style={styles.field}>
+                  <label style={styles.label}>Part number</label>
+                  <input
+                    style={styles.input}
+                    type="text"
+                    placeholder="e.g. 15400-PLM-A02"
+                    value={partNumberQuery}
+                    onChange={e => setPartNumberQuery(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handlePartNumberLookup()}
+                  />
+                </div>
+                <button
+                  style={{ ...styles.button, opacity: partNumberQuery.trim() ? 1 : 0.4 }}
+                  onClick={handlePartNumberLookup}
+                  disabled={!partNumberQuery.trim()}
+                >
+                  Look up
+                </button>
+              </div>
+            )}
+
+            {lookupLoading && (
+              <div style={{ ...styles.card, textAlign: "center", padding: "2rem" }}>
+                <p style={{ fontSize: "15px", color: "#666" }}>Looking up part number...</p>
+              </div>
+            )}
+
+            {partNumberSearched && !lookupLoading && (
+              <div>
+                {partNumberResult ? (
+                  <div style={{ ...styles.card, ...styles.resultCard }}>
+                    <div style={styles.fitBadge}>✅ Part found!</div>
+                    <div style={styles.partGrid}>
+                      <div style={styles.infoBox}>
+                        <p style={styles.infoLabel}>Part number</p>
+                        <p style={styles.infoValue}>{partNumberResult.part_number}</p>
+                      </div>
+                      <div style={styles.infoBox}>
+                        <p style={styles.infoLabel}>Part type</p>
+                        <p style={styles.infoValue}>{partNumberResult.part_type}</p>
+                      </div>
+                      <div style={styles.infoBox}>
+                        <p style={styles.infoLabel}>Fits</p>
+                        <p style={styles.infoValue}>{partNumberResult.year} {partNumberResult.make} {partNumberResult.model} {partNumberResult.trim}</p>
+                      </div>
+                      <div style={styles.infoBox}>
+                        <p style={styles.infoLabel}>Brand</p>
+                        <p style={styles.infoValue}>{partNumberResult.brand}</p>
+                      </div>
+                    </div>
+                    {partNumberResult.notes && (
+                      <p style={styles.note}>💡 {partNumberResult.notes}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ ...styles.card, borderLeft: "4px solid #f59e0b" }}>
+                    <p style={{ fontSize: "16px", fontWeight: "600", color: "#b45309", marginBottom: "8px" }}>
+                      ⚠️ Part number not found
+                    </p>
+                    <p style={{ fontSize: "14px", color: "#666", margin: 0 }}>
+                      We don't have <strong>{partNumberQuery}</strong> in our database yet. Try checking RockAuto or the manufacturer's site.
+                    </p>
+                  </div>
+                )}
+                <button style={styles.resetBtn} onClick={() => { setPartNumberSearched(false); setPartNumberQuery(""); }}>
+                  ← Look up another part
+                </button>
+              </div>
+            )}
+          </>
         )}
 
       </div>
@@ -239,6 +379,27 @@ const styles = {
   header: { marginBottom: "1.5rem" },
   title: { fontSize: "24px", fontWeight: "600", margin: "0 0 4px", color: "#111" },
   subtitle: { fontSize: "15px", color: "#666", margin: 0 },
+  tabs: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "8px",
+    marginBottom: "1rem",
+  },
+  tab: {
+    padding: "10px",
+    borderRadius: "8px",
+    border: "1px solid #ddd",
+    fontSize: "14px",
+    fontWeight: "500",
+    cursor: "pointer",
+    backgroundColor: "#fff",
+    color: "#555",
+  },
+  tabActive: {
+    backgroundColor: "#111",
+    color: "#fff",
+    border: "1px solid #111",
+  },
   card: {
     background: "#fff",
     borderRadius: "12px",
