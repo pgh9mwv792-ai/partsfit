@@ -11,7 +11,7 @@ const VEHICLES = {
   BMW: ["3 Series", "5 Series", "X3", "X5", "M3"],
 };
 
-const YEARS = Array.from({ length: 15 }, (_, i) => 2024 - i);
+const YEARS = Array.from({ length: 35 }, (_, i) => 2024 - i);
 
 const PARTS = [
   "Brake pads (front)",
